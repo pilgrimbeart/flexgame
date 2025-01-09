@@ -1,0 +1,1 @@
+$env:PATH += ";C:\Users\PilgrimBeart\appdata\Local\Programs\Python\Python313;C:\Users\PilgrimBeart\appdata\Local\Programs\Python\Python313\Scripts;C:\Users\PilgrimBeart\AppData\Local\Programs\Git\bin"
