@@ -4,6 +4,7 @@ import random
 from datetime import date
 from PIL import Image, ImageEnhance
 from math import sin
+import sys, os
 
 NUM_TEAMS = 3
 
@@ -85,6 +86,20 @@ def start_countdown():
     charge_level = [0.2 for i in range(NUM_TEAMS)]
     charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
 
+def restart_game(): 
+    global round, current_day, cash, mode, start_time, charge_level, charging_hours
+    round = 0
+    current_day = 0
+    cash = [9.99 for i in range(NUM_TEAMS)]
+
+    # start_countdown()
+    mode = "IDLE"
+    start_time = time.time()
+    charge_level = [0.2 for i in range(NUM_TEAMS)]
+    charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
+
+    sounds["dnb_loop"].stop()
+
 read_energy_prices()
 
 display_info = pygame.display.Info()
@@ -109,22 +124,13 @@ for i in range(4):
 
 running = True
 
-round = 0
-current_day = 0
-cash = [9.99 for i in range(NUM_TEAMS)]
-
-# start_countdown()
-mode = "IDLE"
-start_time = time.time()
-charge_level = [0.2 for i in range(NUM_TEAMS)]
-charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
+restart_game()
 
 while running:
     screen.fill((255,255,255))
     current_hour = int(time.time()-start_time)
 
     for event in pygame.event.get():
-        print(event)
         if event.type == pygame.KEYDOWN:
             if event.key == 27:
                 running = False
@@ -132,6 +138,8 @@ while running:
                 current_day = (current_day+1) % 365
             if event.key == pygame.K_DOWN:
                 current_day = (current_day-1+365) % 365
+            if event.key == ord("r"):
+                restart_game()
             if event.key == ord(" "):
                 if mode in ["IDLE","SCORING"]:
                     round += 1
@@ -139,7 +147,7 @@ while running:
 
         if event.type == pygame.TEXTINPUT:  # For footswitch devices, this deals with repeats better than keydown
             if (event.text[0] >= "1") and (event.text[0] <= chr(ord("0")+NUM_TEAMS)):
-                team = ord(event.text[0]) - ord("0")
+                team = ord(event.text[0]) - ord("1")
                 if (team < NUM_TEAMS) and (mode=="PLAY"):
                     if not charging_hours[team][current_hour]:
                         if charge_level[team] < 1.0:
@@ -170,6 +178,8 @@ while running:
             pass
         else:
             screen.blit(car_images[team], (0, top)) 
+            text_surface = font.render(str(team+1), True, (255,255,255))
+            screen.blit(text_surface, (90, top+80))
 
             # Charge level
             x = screen_width/2 - 50
@@ -211,7 +221,7 @@ while running:
         else:
             mode = "PLAY"
             start_time = time.time()
-            sounds["dnb_loop"].set_volume(0.5)
+            sounds["dnb_loop"].set_volume(0.3)
             sounds["dnb_loop"].play(-1)
 
     if mode=="PLAY":
