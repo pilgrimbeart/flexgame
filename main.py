@@ -5,13 +5,18 @@ from datetime import date
 from PIL import Image, ImageEnhance
 from math import sin
 import sys, os
+import explode
 
-NUM_TEAMS = 3
+NUM_TEAMS = 5
+
+player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
 
 team_colours = [
         (255,0,0),
         (0,255,0),
-        (0,0,255)
+        (0,0,255),
+        (255,165,0),
+        (255,192,203)
         ]
 
 pygame.init()
@@ -59,24 +64,33 @@ def draw_price_chart(day):
 
 def draw_charging_hour(team, hour, fill):
     lines = []
-    left = screen_width / 2
-    top = screen_height / 2
-    xscale = (screen_width / 2 ) / 24
-    yscale = (screen_height / 2) / NUM_TEAMS
-    lines.append( (left + hour * xscale, top + team * yscale) )
-    lines.append( (left + (hour+1) * xscale, top + team * yscale) )
-    lines.append( (left + (hour+1) * xscale, top + (team+1) * yscale) )
-    lines.append( (left + hour * xscale, top + (team+1) * yscale) )
-    pygame.draw.polygon(screen, fill, lines)
-    pygame.draw.lines(screen, (192, 192, 192), True, lines, 1)
+    left = pricechart_left
+    top = pricechart_bottom
+    xscale = (screen_width - pricechart_left) / 24
+    yscale = (screen_height - pricechart_bottom) / NUM_TEAMS
+    l = left + hour * xscale
+    t = top + team * yscale
+    if fill != None:
+        pygame.draw.rect(screen, fill, pygame.Rect(l,t,xscale,yscale), width=0, border_radius=10)  # Fill
+    pygame.draw.rect(screen, (128,128,128), pygame.Rect(l,t,xscale,yscale), width=1, border_radius=10)  # Border
 
-car_images = []
-def load_car_image(imagename):
-    global car_images
+
+    #lines.append( (left + hour * xscale, top + team * yscale) )
+    #lines.append( (left + (hour+1) * xscale, top + team * yscale) )
+    #lines.append( (left + (hour+1) * xscale, top + (team+1) * yscale) )
+    #lines.append( (left + hour * xscale, top + (team+1) * yscale) )
+    #if fill:
+    #    pygame.draw.polygon(screen, fill, lines)
+    #pygame.draw.lines(screen, (0,0,0), True, lines, 2)
+
+def load_image(imagename, target_width, target_height):
     image = pygame.image.load(imagename).convert_alpha()  # Maintain transparency
-    scale_factor = car_height / image.get_height() 
-    scaled_image = pygame.transform.scale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
-    car_images.append(scaled_image)
+    if not target_width:
+        scale_factor = target_height / image.get_height() 
+        scaled_image = pygame.transform.scale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
+    else:
+        scaled_image = pygame.transform.scale(image, (target_width, target_height))
+    return scaled_image
 
 def start_countdown():
     global mode, start_time, charge_level, charging_hours
@@ -87,15 +101,16 @@ def start_countdown():
     charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
 
 def restart_game(): 
-    global round, current_day, cash, mode, start_time, charge_level, charging_hours
+    global round, current_day, cash, mode, start_time, charge_level, charging_hours, penalty_target
     round = 0
     current_day = 0
-    cash = [9.99 for i in range(NUM_TEAMS)]
+    cash = [0.00 for i in range(NUM_TEAMS)]
 
     # start_countdown()
     mode = "IDLE"
     start_time = time.time()
     charge_level = [0.2 for i in range(NUM_TEAMS)]
+    penalty_target = [0 for i in range(NUM_TEAMS)]
     charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
 
     sounds["dnb_loop"].stop()
@@ -107,13 +122,18 @@ screen_width, screen_height = display_info.current_w, display_info.current_h
 screen = pygame.display.set_mode((screen_width, screen_height), pygame.NOFRAME)
 pygame.key.set_repeat(500, 50)  # 500ms delay, 50ms interval
 # Set object dimensions based on screen size
-pricechart_left = screen_width/2
+pricechart_left = screen_width/3
 pricechart_bottom = screen_height/2
-car_height = screen_width/6
+car_height = (screen_height/2)/NUM_TEAMS
+charge_x = 250
+charge_width = 40
 
+player_images = []
+for image in player_graphics:
+    player_images.append(load_image(image, None, car_height))
 
-for image in ["abarth_red.png", "abarth_green.png", "abarth_blue.png"]:
-    load_car_image(image)
+backdrop_image = load_image("backdrop.png",screen_width, screen_height)
+sticker_image = load_image("sticker.png", None, 400)
 
 font = pygame.font.Font("Quicksand-Regular.ttf", 50)
 
@@ -123,17 +143,23 @@ for i in range(4):
     countdown_numbers.append(large_font.render(str(i), True, (0,0,0)))
 
 running = True
+frame_number = 0
 
 restart_game()
 
 while running:
     screen.fill((255,255,255))
     current_hour = int(time.time()-start_time)
+    take_screenshot = False
 
+    # KEYS & GAME LOGIC
+    explodes = []
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             if event.key == 27:
                 running = False
+            if event.key == ord("s"):
+                take_screenshot = True
             if event.key == pygame.K_UP:
                 current_day = (current_day+1) % 365
             if event.key == pygame.K_DOWN:
@@ -158,11 +184,14 @@ while running:
                             if charge_level[team] >= 0.98:  # Close-enough
                                 charge_level[team] = 1.0
                                 sounds["success"].play()
-                            cash[team] -= 7 * (prices[current_day][current_hour] / 1000) # 7kWh per h, and convert £/MWH to £/kWh
+                                explodes.append(team) # Register an explode (we don't know position until rendering below) 
+                            cash[team] += 7 * (prices[current_day][current_hour] / 1000) # 7kWh per h, and convert £/MWH to £/kWh
         if event.type == pygame.QUIT:
             running = False
 
     # RENDER
+    screen.blit(backdrop_image,(0,0))
+    screen.blit(sticker_image, (50,100))
     text_surface = font.render("Round "+str(round), True, (0,0,0))
     screen.blit(text_surface, (0,0))
     text_surface = font.render("Day "+str(current_day), True, (0,0,0))  # TODO: Only on change
@@ -173,35 +202,37 @@ while running:
         top = screen_height/2 + float(team) * spacing
         bottom = screen_height/2 + float(team+1) * spacing
 
+        if team in explodes:
+            explode.explode(charge_x+charge_width/2, top, team_colours[team])
+
         # Car
         if (mode=="FINISHED") and (charge_level[team] < 1.0) and random.random() > 0.5: # Make car flicker if it fails to charge
             pass
         else:
-            screen.blit(car_images[team], (0, top)) 
-            text_surface = font.render(str(team+1), True, (255,255,255))
-            screen.blit(text_surface, (90, top+80))
+            screen.blit(player_images[team], (50, top)) 
+            text_surface = font.render(str(team+1), True, (0,0,0))
+            screen.blit(text_surface, (15, top+20))
 
             # Charge level
-            x = screen_width/2 - 50
             rect_height = spacing-10
-            pygame.draw.rect(screen, team_colours[team], pygame.Rect(x,top,20,rect_height), width=1, border_radius=10) 
-            pygame.draw.rect(screen, team_colours[team], pygame.Rect(x,top*charge_level[team]+bottom*(1-charge_level[team]),20, rect_height * charge_level[team]), width=0, border_radius=10)
+            pygame.draw.rect(screen, team_colours[team], pygame.Rect(charge_x,top,charge_width,rect_height), width=1, border_radius=10) 
+            pygame.draw.rect(screen, team_colours[team], pygame.Rect(charge_x,top*charge_level[team]+bottom*(1-charge_level[team]),charge_width, rect_height * charge_level[team]), width=0, border_radius=10)
 
-        if mode=="SCORING":
-            if cash[team] >= max(cash):
+        if mode=="SCORING": # "1st" badge
+            if cash[team] <= min(cash):
                 image = pygame.image.load("first.png").convert_alpha() 
-                scale_factor = (0.7 + 0.5 * sin(time.time()*4)) * (car_height / image.get_height()) / 2 # Make the "1st" symbol about half the size of the car
+                scale_factor = (1.0 + 0.2 * sin(time.time()*4)) * (car_height / image.get_height()) 
                 scaled_image = pygame.transform.scale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
-                screen.blit(scaled_image, (100,top))
+                screen.blit(scaled_image, (150,top))
 
         # Cash
         text_surface = font.render(f"£{cash[team]:.2f}", True, (0,0,0))
-        screen.blit(text_surface, (x-200, top))
+        screen.blit(text_surface, (350, top))
 
         for hour in range(24):
-            colour = (255,255,255)
-            if (mode=="PLAY") and (hour==current_hour):
-                if random.random()>0.5:
+            colour = None
+            if (mode=="PLAY") and (hour==current_hour) and charge_level[team]<1.0:
+                if frame_number % 2 == 0:
                     colour = (255,255,0)
             if charging_hours[team][hour]:
                 colour = team_colours[team]
@@ -221,7 +252,7 @@ while running:
         else:
             mode = "PLAY"
             start_time = time.time()
-            sounds["dnb_loop"].set_volume(0.3)
+            sounds["dnb_loop"].set_volume(0.1)
             sounds["dnb_loop"].play(-1)
 
     if mode=="PLAY":
@@ -231,20 +262,27 @@ while running:
             mode = "FINISHED"
             start_time=time.time()
             for team in range(NUM_TEAMS): # Check for inadequate charging
+                penalty_target[team] = cash[team]
                 if charge_level[team] < 1:
                     sounds["buzzer"].play()
+                    penalty_target[team] += 10 # £10 penalty
 
     if mode=="FINISHED":
         for team in range(NUM_TEAMS):
             if charge_level[team] < 1.0:
-                cash[team] = max(0, cash[team] - 0.01)  # Drain it to zero!
+                cash[team] = min(penalty_target[team], cash[team] + 0.10)  # Boost spend to penalty
 
         if time.time() > start_time + 5:
             mode = "SCORING"
             start_time = time.time()
             sounds["win"].play()
 
+    explode.render(screen)
+
+    if take_screenshot:
+        pygame.image.save(screen, "screenshot.png")
     pygame.display.flip()
+    frame_number += 1
 
 # Quit Pygame
 pygame.quit()
