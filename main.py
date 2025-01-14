@@ -11,9 +11,9 @@ NUM_TEAMS = 5
 NUM_ROUNDS = 3
 
 prices = [ # Pence per kWh. 24h per round.
-        [10,10,10,11,11,10,12,12,13,14,13,15,17,20,20,21,23,24,26,27,28,29,30,31],
-        [20,19,20,21,19,19,18,14,10,11,10,11,10,11,11,12,13,14,17,18,19,20,21,21],
-        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14,12,10, 9, 8, 7, 6]
+        [10,10,10,11,11,10,12,12,13,14,13,15,17,20,20,21,23,24,26,26,25,26,25,26],
+        [20,19,20,21,19,19,18,14,10,11,10,11,10, 9, 8,12,13,14,17,18,19,20,21,21],
+        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14, 9, 4, 3, 4, 0, 0]
         ]
 
 player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
@@ -113,14 +113,13 @@ def reset_charge():
     charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
 
 def restart_game(): 
-    global round, cash, mode, start_time, charge_level, charging_hours, penalty_target
+    global round, cash, mode, start_time, charge_level, charging_hours
     round = 0
     cash = [0.00 for i in range(NUM_TEAMS)]
 
     # start_countdown()
     mode = "IDLE"
     start_time = time.time()
-    penalty_target = [0 for i in range(NUM_TEAMS)]
     reset_charge()
 
     sounds["dnb_loop"].stop()
@@ -134,7 +133,7 @@ pricechart_left = screen_width/3
 pricechart_bottom = screen_height/2
 car_height = (screen_height/2)/NUM_TEAMS
 charge_x = 250
-charge_width = 40
+charge_width = 80
 
 player_images = []
 for image in player_graphics:
@@ -158,7 +157,7 @@ restart_game()
 
 while running:
     screen.fill((255,255,255))
-    current_hour = int(time.time()-start_time)
+    current_hour = min(23, int(time.time()-start_time))
     take_screenshot = False
 
     # KEYS & GAME LOGIC
@@ -270,28 +269,27 @@ while running:
             sounds["dnb_loop"].play(-1)
 
     if mode=="PLAY":
-        if current_hour>23:
+        if (time.time() - start_time) > 24:
             sounds["dnb_loop"].stop()
             sounds["hit"].play()
             mode = "FINISHED"
             start_time=time.time()
             for team in range(NUM_TEAMS): # Check for inadequate charging
-                penalty_target[team] = cash[team]
                 if charge_level[team] < 1:
                     sounds["buzzer"].play()
-                    penalty_target[team] += 10 # £10 penalty
 
     if mode=="FINISHED":
         for team in range(NUM_TEAMS):
             if charge_level[team] < 1.0:
-                cash[team] = min(penalty_target[team], cash[team] + 0.10)  # Boost spend to penalty
+                cash[team] += 0.05 # £1 penalty for each 0.1 of charging not done
+                charge_level[team] = min(1.0, charge_level[team] + 0.0025)
 
         if time.time() > start_time + 5:
             mode = "SCORING"
             start_time = time.time()
             sounds["win"].play()
 
-    if (mode in ["FINISHED","SCORING"]) and (round>=NUM_ROUNDS-1):
+    if (mode in ["SCORING"]) and (round>=NUM_ROUNDS-1):
         if int(time.time()) % 2:
             text_surface = medium_font.render("GAME OVER", True, (0,0,0))
             screen.blit(text_surface, (screen_width/2 - text_surface.get_width()/2, screen_height/2 - text_surface.get_height()/2))
