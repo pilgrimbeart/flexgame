@@ -8,6 +8,13 @@ import sys, os
 import explode
 
 NUM_TEAMS = 5
+NUM_ROUNDS = 3
+
+prices = [ # Pence per kWh. 24h per round.
+        [10,10,10,11,11,10,12,12,13,14,13,15,17,20,20,21,23,24,26,27,28,29,30,31],
+        [20,19,20,21,19,19,18,14,10,11,10,11,10,11,11,12,13,14,17,18,19,20,21,21],
+        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14,12,10, 9, 8, 7, 6]
+        ]
 
 player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
 
@@ -31,22 +38,24 @@ sound_file_names = [
         ("success-1-6297.mp3", "success"),
         ("buzzer-15-187758.mp3", "buzzer"),
         ("you-win-sequence-3-183950.mp3","win"),
-        ("not-charged.mp3","notcharged")
+        ("not-charged.mp3","notcharged"),
+        ("realitycoming-69491.mp3","anticipation")
 ]
 sounds = {}
 for filename,short in sound_file_names:
     sounds[short] = pygame.mixer.Sound(filename)
 
-prices = [[] for _ in range(365)]
-def read_energy_prices():
-    global prices
-    for line in open("epex_hourly_auction_outturn_2023onwards.csv","rt").readlines()[1:]:
-        datetime, price, volume = line.split(",")
-        day,month,year = datetime.split(" ")[0].split("/")
-        if year=="2023":
-            day_of_year = date(int(year),int(month),int(day)).timetuple().tm_yday-1
-            hour = datetime.split(" ")[1].split(":")[0]
-            prices[day_of_year].append(float(price))     # RELIES ON DATA BEING SORTED!
+#prices = [[] for _ in range(365)]
+#def read_energy_prices():
+#    global prices
+#    for line in open("epex_hourly_auction_outturn_2023onwards.csv","rt").readlines()[1:]:
+#        datetime, price, volume = line.split(",")
+#        day,month,year = datetime.split(" ")[0].split("/")
+#        if year=="2023":
+#            day_of_year = date(int(year),int(month),int(day)).timetuple().tm_yday-1
+#            hour = datetime.split(" ")[1].split(":")[0]
+#            prices[day_of_year].append(float(price))     # RELIES ON DATA BEING SORTED!
+#read_energy_prices()
 
 def draw_price_chart(day):
     pygame.draw.line(screen, (128,128,128), (pricechart_left, 0), (pricechart_left, pricechart_bottom), 2)
@@ -56,10 +65,10 @@ def draw_price_chart(day):
     wid = screen_width - pricechart_left
     hgt = pricechart_bottom
     xscale = wid/24
-    yscale = 1
+    yscale = pricechart_bottom / 27 # 27p is max price
     lines = []
     for hour in range(24):
-        lines.append( (pricechart_left + hour * xscale, pricechart_bottom - prices[day][hour]) )
+        lines.append( (pricechart_left + hour * xscale, pricechart_bottom - prices[day][hour] * yscale) )
     pygame.draw.lines(screen, (255,128,128), False, lines, 5) 
 
 def draw_charging_hour(team, hour, fill):
@@ -97,25 +106,24 @@ def start_countdown():
     mode = "COUNTDOWN"
     start_time = time.time()
     sounds["ready"].play()
+
+def reset_charge():
+    global charge_level, charging_hours
     charge_level = [0.2 for i in range(NUM_TEAMS)]
     charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
 
 def restart_game(): 
-    global round, current_day, cash, mode, start_time, charge_level, charging_hours, penalty_target
+    global round, cash, mode, start_time, charge_level, charging_hours, penalty_target
     round = 0
-    current_day = 0
     cash = [0.00 for i in range(NUM_TEAMS)]
 
     # start_countdown()
     mode = "IDLE"
     start_time = time.time()
-    charge_level = [0.2 for i in range(NUM_TEAMS)]
     penalty_target = [0 for i in range(NUM_TEAMS)]
-    charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
+    reset_charge()
 
     sounds["dnb_loop"].stop()
-
-read_energy_prices()
 
 display_info = pygame.display.Info()
 screen_width, screen_height = display_info.current_w, display_info.current_h
@@ -136,8 +144,9 @@ backdrop_image = load_image("backdrop.png",screen_width, screen_height)
 sticker_image = load_image("sticker.png", None, 400)
 
 font = pygame.font.Font("Quicksand-Regular.ttf", 50)
-
+medium_font = pygame.font.Font("Quicksand-Bold.ttf", 96)
 large_font = pygame.font.Font("Quicksand-Bold.ttf", 512)
+
 countdown_numbers = []
 for i in range(4):
     countdown_numbers.append(large_font.render(str(i), True, (0,0,0)))
@@ -160,16 +169,22 @@ while running:
                 running = False
             if event.key == ord("s"):
                 take_screenshot = True
-            if event.key == pygame.K_UP:
-                current_day = (current_day+1) % 365
-            if event.key == pygame.K_DOWN:
-                current_day = (current_day-1+365) % 365
+            # if event.key == pygame.K_UP:
+            #     current_day = (current_day+1) % 365
+            # if event.key == pygame.K_DOWN:
+            #     current_day = (current_day-1+365) % 365
             if event.key == ord("r"):
                 restart_game()
             if event.key == ord(" "):
-                if mode in ["IDLE","SCORING"]:
-                    round += 1
+                if mode == "IDLE":
                     start_countdown()
+                if mode == "SCORING":
+                    if round < NUM_ROUNDS-1:
+                        sounds["anticipation"].set_volume(0.1)
+                        sounds["anticipation"].play()
+                        round = round + 1
+                        mode = "IDLE"
+                        reset_charge()
 
         if event.type == pygame.TEXTINPUT:  # For footswitch devices, this deals with repeats better than keydown
             if (event.text[0] >= "1") and (event.text[0] <= chr(ord("0")+NUM_TEAMS)):
@@ -185,17 +200,15 @@ while running:
                                 charge_level[team] = 1.0
                                 sounds["success"].play()
                                 explodes.append(team) # Register an explode (we don't know position until rendering below) 
-                            cash[team] += 7 * (prices[current_day][current_hour] / 1000) # 7kWh per h, and convert £/MWH to £/kWh
+                            cash[team] += 7 * (prices[round][current_hour]) / 100 # 7kWh per h, and turn pence into pounds
         if event.type == pygame.QUIT:
             running = False
 
     # RENDER
     screen.blit(backdrop_image,(0,0))
     screen.blit(sticker_image, (50,100))
-    text_surface = font.render("Round "+str(round), True, (0,0,0))
-    screen.blit(text_surface, (0,0))
-    text_surface = font.render("Day "+str(current_day), True, (0,0,0))  # TODO: Only on change
-    screen.blit(text_surface, (0,50))
+    text_surface = font.render("Round "+str(round+1), True, (0,0,0))
+    screen.blit(text_surface, (20,0))
 
     for team in range(NUM_TEAMS):
         spacing = (screen_height/2) / NUM_TEAMS
@@ -238,7 +251,7 @@ while running:
                 colour = team_colours[team]
             draw_charging_hour(team, hour, colour)
 
-    draw_price_chart(current_day)
+    draw_price_chart(round)
 
     if mode=="COUNTDOWN":
         t = time.time() - start_time
@@ -252,7 +265,8 @@ while running:
         else:
             mode = "PLAY"
             start_time = time.time()
-            sounds["dnb_loop"].set_volume(0.1)
+            sounds["anticipation"].stop()
+            sounds["dnb_loop"].set_volume(0.2)
             sounds["dnb_loop"].play(-1)
 
     if mode=="PLAY":
@@ -276,6 +290,11 @@ while running:
             mode = "SCORING"
             start_time = time.time()
             sounds["win"].play()
+
+    if (mode in ["FINISHED","SCORING"]) and (round>=NUM_ROUNDS-1):
+        if int(time.time()) % 2:
+            text_surface = medium_font.render("GAME OVER", True, (0,0,0))
+            screen.blit(text_surface, (screen_width/2 - text_surface.get_width()/2, screen_height/2 - text_surface.get_height()/2))
 
     explode.render(screen)
 
