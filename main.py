@@ -8,7 +8,7 @@ import sys, os
 import explode
 
 NUM_TEAMS = 5
-NUM_ROUNDS = 3
+NUM_ROUNDS = 5
 CHARGING_HOURS = 12
 
 pygame.init()
@@ -25,14 +25,23 @@ pygame.key.set_repeat(500, 50)  # 500ms delay, 50ms interval
 pygame.mixer.init()
 pygame.mouse.set_visible(False)
 
+start_charge_level = [
+        0.5,
+        0.5,
+        0.3,
+        0.3,
+        0
+        ]
 
 prices = [ # Pence per kWh. 24h per round.
         [10,10,11,12,13,13,17,20,23,26,25,25],
+        [18,19,18,17,10,10, 9,10,12,14,15,16],
         [20,20,19,14, 9,14,10, 7,17,17,19,21],
+        [10, 9, 8, 6, 3, 0,-3,-4, 4,10,12,14],
         [20,20,23,24,26,26,24,20,16, 9, 3, 0]
         ]
 
-player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
+player_graphics = ["red_walking_robot.png", "green_sphere_robot.png", "blue_wheeled_robot.png", "orange_wheeled_robot.png", "pink_tracked_robot.png"]
 
 team_colours = [
         (255,0,0),
@@ -117,20 +126,22 @@ def load_image(imagename, target_width, target_height):
     image = pygame.image.load(imagename).convert_alpha()  # Maintain transparency
     if not target_width:
         scale_factor = target_height / image.get_height() 
-        scaled_image = pygame.transform.scale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
+        scaled_image = pygame.transform.smoothscale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
     else:
-        scaled_image = pygame.transform.scale(image, (target_width, target_height))
+        scaled_image = pygame.transform.smoothscale(image, (target_width, target_height))
     return scaled_image
 
 def start_countdown():
-    global mode, start_time, charge_level, charging_hours
+    global mode, start_time
     mode = "COUNTDOWN"
     start_time = time.time()
     sounds["ready"].play()
+    sounds["anticipation"].set_volume(0.1)
+    sounds["anticipation"].play()
 
-def reset_charge():
+def reset_charge(round):
     global charge_level, charging_hours
-    charge_level = [0.2 for i in range(NUM_TEAMS)]
+    charge_level = [start_charge_level[round] for i in range(NUM_TEAMS)]
     charging_hours = [[False for __ in range(CHARGING_HOURS)] for _ in range(NUM_TEAMS)]
 
 def restart_game(): 
@@ -141,7 +152,7 @@ def restart_game():
     # start_countdown()
     mode = "IDLE"
     start_time = time.time()
-    reset_charge()
+    reset_charge(round)
 
     sounds["dnb_loop"].stop()
 
@@ -158,6 +169,7 @@ for image in player_graphics:
 
 backdrop_image = load_image("backdrop.png",screen_width, screen_height)
 sticker_image = load_image("sticker.png", None, 400)
+battery_image = load_image("battery.png",None, 50)
 
 font = pygame.font.Font("Quicksand-Regular.ttf", 50)
 medium_font = pygame.font.Font("Quicksand-Bold.ttf", 96)
@@ -185,10 +197,12 @@ while running:
                 running = False
             if event.key == ord("s"):
                 take_screenshot = True
-            # if event.key == pygame.K_UP:
-            #     current_day = (current_day+1) % 365
-            # if event.key == pygame.K_DOWN:
-            #     current_day = (current_day-1+365) % 365
+            if event.key == pygame.K_UP:
+                if round < NUM_ROUNDS-1:
+                    round += 1
+            if event.key == pygame.K_DOWN:
+                if round > 0:
+                    round -= 1
             if event.key == ord("r"):
                 restart_game()
             if event.key == ord(" "):
@@ -196,11 +210,9 @@ while running:
                     start_countdown()
                 if mode == "SCORING":
                     if round < NUM_ROUNDS-1:
-                        sounds["anticipation"].set_volume(0.1)
-                        sounds["anticipation"].play()
                         round = round + 1
                         mode = "IDLE"
-                        reset_charge()
+                        reset_charge(round)
 
         if event.type == pygame.TEXTINPUT:  # For footswitch devices, this deals with repeats better than keydown
             if (event.text[0] >= "1") and (event.text[0] <= chr(ord("0")+NUM_TEAMS)):
@@ -238,20 +250,24 @@ while running:
         if (mode=="FINISHED") and (charge_level[team] < 1.0) and random.random() > 0.5: # Make car flicker if it fails to charge
             pass
         else:
-            screen.blit(player_images[team], (50, top)) 
             text_surface = font.render(str(team+1), True, (0,0,0))
-            screen.blit(text_surface, (15, top+20))
+            screen.blit(text_surface, (15, top+20))  # Team number
+            x = 70
+            if mode not in ["COUNTDOWN", "PLAY"]:
+                x += sin(time.time() + team*2) * 20
+            screen.blit(player_images[team], (x, top))  # Team image
 
             # Charge level
             rect_height = spacing-10
             pygame.draw.rect(screen, team_colours[team], pygame.Rect(charge_x,top,charge_width,rect_height), width=1, border_radius=10) 
-            pygame.draw.rect(screen, team_colours[team], pygame.Rect(charge_x,top*charge_level[team]+bottom*(1-charge_level[team]),charge_width, rect_height * charge_level[team]), width=0, border_radius=10)
+            pygame.draw.rect(screen, team_colours[team], pygame.Rect(charge_x,top*charge_level[team] + (top+rect_height)*(1-charge_level[team]),charge_width, rect_height * charge_level[team]), width=0, border_radius=10)
+            screen.blit(battery_image, (charge_x + charge_width/2 - battery_image.get_width()/2, top + rect_height/2 - battery_image.get_height()/2))
 
         if mode=="SCORING": # "1st" badge
             if cash[team] <= min(cash):
                 image = pygame.image.load("first.png").convert_alpha() 
                 scale_factor = (1.0 + 0.2 * sin(time.time()*4)) * (car_height / image.get_height()) 
-                scaled_image = pygame.transform.scale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
+                scaled_image = pygame.transform.smoothscale(image, ( int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
                 screen.blit(scaled_image, (150,top))
 
         # Cash
@@ -275,7 +291,7 @@ while running:
             i = int(t)
             ts = t % 1
             scale = (screen_height) / (1 + ts)
-            c = pygame.transform.scale(countdown_numbers[3-i], (scale,scale))
+            c = pygame.transform.smoothscale(countdown_numbers[3-i], (scale,scale))
             c.set_alpha(128)
             screen.blit(c, (screen_width/2 - scale/2, screen_height/2 - scale/2))
         else:
