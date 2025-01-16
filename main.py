@@ -9,11 +9,12 @@ import explode
 
 NUM_TEAMS = 5
 NUM_ROUNDS = 3
+CHARGING_HOURS = 12
 
 prices = [ # Pence per kWh. 24h per round.
-        [10,10,10,11,11,10,12,12,13,14,13,15,17,20,20,21,23,24,26,26,25,26,25,26],
-        [20,19,20,21,19,19,14,10, 9,10,14,11,10, 9, 7,16,17,17,17,18,19,20,21,21],
-        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14, 9, 4, 3, 0, 0, 0]
+        [10,10,11,12,13,13,17,20,23,26,25,25],
+        [20,20,19,14, 9,14,10, 7,17,17,19,21],
+        [20,20,23,24,26,26,24,20,16, 9, 3, 0]
         ]
 
 player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
@@ -72,9 +73,9 @@ def draw_price_chart(day, highlight_hour, do_highlight):
     pygame.draw.line(screen, (128,128,128), (screen_width, 0), (pricechart_left, 0), 2)
     wid = screen_width - pricechart_left
     hgt = pricechart_bottom
-    xscale = wid/24
+    xscale = wid/CHARGING_HOURS
     yscale = pricechart_bottom / 27 # 27p is max price
-    draw_hour_range(0,24, (255,128,128))
+    draw_hour_range(0,CHARGING_HOURS, (255,128,128))
     if do_highlight:
         draw_hour_range(highlight_hour, 1,(255,255,0))
 
@@ -82,7 +83,7 @@ def draw_charging_hour(team, hour, fill):
     lines = []
     left = pricechart_left
     top = pricechart_bottom
-    xscale = (screen_width - pricechart_left) / 24
+    xscale = (screen_width - pricechart_left) / CHARGING_HOURS
     yscale = (screen_height - pricechart_bottom) / NUM_TEAMS
     l = left + hour * xscale
     t = top + team * yscale
@@ -117,7 +118,7 @@ def start_countdown():
 def reset_charge():
     global charge_level, charging_hours
     charge_level = [0.2 for i in range(NUM_TEAMS)]
-    charging_hours = [[False for __ in range(24)] for _ in range(NUM_TEAMS)]
+    charging_hours = [[False for __ in range(CHARGING_HOURS)] for _ in range(NUM_TEAMS)]
 
 def restart_game(): 
     global round, cash, mode, start_time, charge_level, charging_hours
@@ -164,7 +165,7 @@ restart_game()
 
 while running:
     screen.fill((255,255,255))
-    current_hour = min(23, int(time.time()-start_time))
+    current_hour = min(CHARGING_HOURS-1, int(time.time()-start_time))
     take_screenshot = False
 
     # KEYS & GAME LOGIC
@@ -248,7 +249,7 @@ while running:
         text_surface = font.render(f"£{cash[team]:.2f}", True, (0,0,0))
         screen.blit(text_surface, (350, top))
 
-        for hour in range(24):
+        for hour in range(CHARGING_HOURS):
             colour = None
             if (mode=="PLAY") and (hour==current_hour) and charge_level[team]<1.0:
                 if frame_number % 2 == 0:
@@ -276,7 +277,7 @@ while running:
             sounds["dnb_loop"].play(-1)
 
     if mode=="PLAY":
-        if (time.time() - start_time) > 24:
+        if (time.time() - start_time) > CHARGING_HOURS:
             sounds["dnb_loop"].stop()
             sounds["hit"].play()
             mode = "FINISHED"
