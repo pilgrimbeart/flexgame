@@ -11,6 +11,21 @@ NUM_TEAMS = 5
 NUM_ROUNDS = 3
 CHARGING_HOURS = 12
 
+pygame.init()
+displays = pygame.display.get_desktop_sizes()
+print("Displays:\n",displays)
+
+display = 0
+if len(sys.argv) > 1:
+    display = int(sys.argv[1])
+print("Using display",display)
+(screen_width, screen_height) = displays[display]
+screen = pygame.display.set_mode((screen_width, screen_height), display=display, flags=pygame.FULLSCREEN | pygame.SCALED)
+pygame.key.set_repeat(500, 50)  # 500ms delay, 50ms interval
+pygame.mixer.init()
+pygame.mouse.set_visible(False)
+
+
 prices = [ # Pence per kWh. 24h per round.
         [10,10,11,12,13,13,17,20,23,26,25,25],
         [20,20,19,14, 9,14,10, 7,17,17,19,21],
@@ -26,10 +41,6 @@ team_colours = [
         (255,165,0),
         (255,192,203)
         ]
-
-pygame.init()
-pygame.mixer.init()
-pygame.mouse.set_visible(False)
 
 sound_file_names = [
         ("laser-zap-2-90669.mp3", "zap"),
@@ -71,6 +82,8 @@ def draw_price_chart(day, highlight_hour, do_highlight):
     pygame.draw.line(screen, (128,128,128), (pricechart_left, pricechart_bottom), (screen_width, pricechart_bottom), 2)
     pygame.draw.line(screen, (128,128,128), (screen_width, pricechart_bottom), (screen_width, 0), 2)
     pygame.draw.line(screen, (128,128,128), (screen_width, 0), (pricechart_left, 0), 2)
+    text_surface = font.render("Price Chart", True, (0,0,0))
+    screen.blit(text_surface, (pricechart_left + 20, 0))
     wid = screen_width - pricechart_left
     hgt = pricechart_bottom
     xscale = wid/CHARGING_HOURS
@@ -132,10 +145,6 @@ def restart_game():
 
     sounds["dnb_loop"].stop()
 
-display_info = pygame.display.Info()
-screen_width, screen_height = display_info.current_w, display_info.current_h
-screen = pygame.display.set_mode((screen_width, screen_height), pygame.NOFRAME)
-pygame.key.set_repeat(500, 50)  # 500ms delay, 50ms interval
 # Set object dimensions based on screen size
 pricechart_left = screen_width/3
 pricechart_bottom = screen_height/2
