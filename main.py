@@ -12,8 +12,8 @@ NUM_ROUNDS = 3
 
 prices = [ # Pence per kWh. 24h per round.
         [10,10,10,11,11,10,12,12,13,14,13,15,17,20,20,21,23,24,26,26,25,26,25,26],
-        [20,19,20,21,19,19,18,14,10,11,10,11,10, 9, 8,12,13,14,17,18,19,20,21,21],
-        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14, 9, 4, 3, 4, 0, 0]
+        [20,19,20,21,19,19,14,10, 9,10,14,11,10, 9, 7,16,17,17,17,18,19,20,21,21],
+        [20,19,20,21,23,23,24,25,26,26,26,25,24,23,20,18,16,14, 9, 4, 3, 0, 0, 0]
         ]
 
 player_graphics = ["wall-e.png", "eve.png", "mo.png", "sentry.png", "go-4.png"]
@@ -57,7 +57,15 @@ for filename,short in sound_file_names:
 #            prices[day_of_year].append(float(price))     # RELIES ON DATA BEING SORTED!
 #read_energy_prices()
 
-def draw_price_chart(day):
+def draw_price_chart(day, highlight_hour, do_highlight):
+    def draw_hour_range(start,len,colour):
+        points = []
+        for hour in range(start, start+len):
+            x = pricechart_left + hour * xscale
+            y = pricechart_bottom - prices[day][hour] * yscale
+            points.append( (x,y) )
+            points.append( (x + xscale, y) )
+        pygame.draw.lines(screen, colour, False, points, 5) 
     pygame.draw.line(screen, (128,128,128), (pricechart_left, 0), (pricechart_left, pricechart_bottom), 2)
     pygame.draw.line(screen, (128,128,128), (pricechart_left, pricechart_bottom), (screen_width, pricechart_bottom), 2)
     pygame.draw.line(screen, (128,128,128), (screen_width, pricechart_bottom), (screen_width, 0), 2)
@@ -66,10 +74,9 @@ def draw_price_chart(day):
     hgt = pricechart_bottom
     xscale = wid/24
     yscale = pricechart_bottom / 27 # 27p is max price
-    lines = []
-    for hour in range(24):
-        lines.append( (pricechart_left + hour * xscale, pricechart_bottom - prices[day][hour] * yscale) )
-    pygame.draw.lines(screen, (255,128,128), False, lines, 5) 
+    draw_hour_range(0,24, (255,128,128))
+    if do_highlight:
+        draw_hour_range(highlight_hour, 1,(255,255,0))
 
 def draw_charging_hour(team, hour, fill):
     lines = []
@@ -250,7 +257,7 @@ while running:
                 colour = team_colours[team]
             draw_charging_hour(team, hour, colour)
 
-    draw_price_chart(round)
+    draw_price_chart(round, current_hour, mode=="PLAY")
 
     if mode=="COUNTDOWN":
         t = time.time() - start_time
@@ -281,8 +288,8 @@ while running:
     if mode=="FINISHED":
         for team in range(NUM_TEAMS):
             if charge_level[team] < 1.0:
-                cash[team] += 0.05 # £1 penalty for each 0.1 of charging not done
-                charge_level[team] = min(1.0, charge_level[team] + 0.0025)
+                cash[team] += 0.04 # £1 penalty for each 0.1 of charging not done
+                charge_level[team] = min(1.0, charge_level[team] + 0.002)
 
         if time.time() > start_time + 5:
             mode = "SCORING"
