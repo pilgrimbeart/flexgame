@@ -42,6 +42,7 @@ prices = [ # Pence per kWh. 24h per round.
         ]
 
 player_graphics = ["red_walking_robot.png", "green_sphere_robot.png", "blue_wheeled_robot.png", "orange_wheeled_robot.png", "pink_tracked_robot.png"]
+player_names = ["ben", "bob", "mia", "kay", "sam"]
 
 team_colours = [
         (255,0,0),
@@ -86,7 +87,7 @@ def draw_price_chart(day, highlight_hour, do_highlight):
             y = pricechart_bottom - prices[day][hour] * yscale
             points.append( (x,y) )
             points.append( (x + xscale, y) )
-        pygame.draw.lines(screen, colour, False, points, 5) 
+        pygame.draw.lines(screen, colour, False, points, 8) 
     pygame.draw.line(screen, (128,128,128), (pricechart_left, 0), (pricechart_left, pricechart_bottom), 2)
     pygame.draw.line(screen, (128,128,128), (pricechart_left, pricechart_bottom), (screen_width, pricechart_bottom), 2)
     pygame.draw.line(screen, (128,128,128), (screen_width, pricechart_bottom), (screen_width, 0), 2)
@@ -97,7 +98,7 @@ def draw_price_chart(day, highlight_hour, do_highlight):
     hgt = pricechart_bottom
     xscale = wid/CHARGING_HOURS
     yscale = pricechart_bottom / 27 # 27p is max price
-    draw_hour_range(0,CHARGING_HOURS, (255,128,128))
+    draw_hour_range(0,CHARGING_HOURS, (255,64,64))
     if do_highlight:
         draw_hour_range(highlight_hour, 1,(255,255,0))
 
@@ -174,6 +175,7 @@ battery_image = load_image("battery.png",None, 50)
 font = pygame.font.Font("Quicksand-Regular.ttf", 50)
 medium_font = pygame.font.Font("Quicksand-Bold.ttf", 96)
 large_font = pygame.font.Font("Quicksand-Bold.ttf", 512)
+tiny_font = pygame.font.Font("Quicksand-Bold.ttf", 20)
 
 countdown_numbers = []
 for i in range(4):
@@ -234,7 +236,7 @@ while running:
 
     # RENDER
     screen.blit(backdrop_image,(0,0))
-    screen.blit(sticker_image, (50,100))
+    screen.blit(sticker_image, (40,80))
     text_surface = font.render("Round "+str(round+1), True, (0,0,0))
     screen.blit(text_surface, (20,0))
 
@@ -251,11 +253,13 @@ while running:
             pass
         else:
             text_surface = font.render(str(team+1), True, (0,0,0))
-            screen.blit(text_surface, (15, top+20))  # Team number
+            screen.blit(text_surface, (15, top+10))  # Team number
             x = 70
             if mode not in ["COUNTDOWN", "PLAY"]:
                 x += sin(time.time() + team*2) * 20
             screen.blit(player_images[team], (x, top))  # Team image
+            text_surface = tiny_font.render(player_names[team], True, (0,0,0)) # Team Name
+            screen.blit(text_surface, (10, top+spacing/2+10)) 
 
             # Charge level
             rect_height = spacing-10
@@ -272,7 +276,7 @@ while running:
 
         # Cash
         text_surface = font.render(f"£{cash[team]:.2f}", True, (0,0,0))
-        screen.blit(text_surface, (350, top))
+        screen.blit(text_surface, (350, top+10))
 
         for hour in range(CHARGING_HOURS):
             colour = None
