@@ -161,7 +161,7 @@ def restart_game():
 pricechart_left = screen_width/3
 pricechart_bottom = screen_height/2
 car_height = (screen_height/2)/NUM_TEAMS
-charge_x = 250
+charge_x = 240
 charge_width = 80
 
 player_images = []
